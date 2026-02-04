@@ -1,67 +1,74 @@
-use empleos_inclusivos_backend::{handlers, middleware, AppState};
-use axum::{
-    middleware as axum_middleware,
-    routing::{get, post},
-    Router,
-};
-use tower_http::cors::CorsLayer;
+use axum::{routing::get, Router};
+use empleos_inclusivos_backend::{config::Config, handlers, AppState};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load environment variables
+    dotenvy::dotenv().ok();
+
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive(tracing::Level::INFO.into()),
         )
+        .json()
         .init();
 
-    // Load environment variables
-    dotenvy::dotenv().ok();
+    // Load configuration
+    let config = Config::from_env()?;
+    let port = config.app_port;
 
-    // Initialize database connection pool
-    let database_url = std::env::var("DATABASE_URL")?;
-    tracing::info!("Connecting to database...");
-    let pool = sqlx::PgPool::connect(&database_url).await?;
+    tracing::info!("Starting EmpleosInclusivos backend in {} mode", config.app_env);
 
-    // Run migrations
-    tracing::info!("Running migrations...");
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    // Initialize application state (DB, Redis, S3, Email)
+    let app_state = AppState::new(config).await?;
 
-    // Build application state
-    let app_state = AppState { db: pool };
+    // Reference data routes (public)
+    let reference_routes = Router::new()
+        .route("/api/reference/countries", get(handlers::list_countries))
+        .route("/api/reference/regions", get(handlers::list_regions))
+        .route(
+            "/api/reference/municipalities",
+            get(handlers::list_municipalities),
+        )
+        .route("/api/reference/industries", get(handlers::list_industries))
+        .route("/api/reference/work-areas", get(handlers::list_work_areas))
+        .route(
+            "/api/reference/position-levels",
+            get(handlers::list_position_levels),
+        )
+        .route(
+            "/api/reference/career-fields",
+            get(handlers::list_career_fields),
+        )
+        .route(
+            "/api/reference/institutions",
+            get(handlers::list_institutions),
+        )
+        .route("/api/reference/languages", get(handlers::list_languages))
+        .route(
+            "/api/reference/skill-categories",
+            get(handlers::list_skill_categories),
+        )
+        .route("/api/reference/skills", get(handlers::list_skills));
 
-    // Protected routes (require authentication)
-    let protected_routes = Router::new()
-        .route("/api/auth/me", get(handlers::me))
-        .route("/api/applications", post(handlers::create_application))
-        .route("/api/applications/my", get(handlers::my_applications))
-        .route_layer(axum_middleware::from_fn(middleware::require_auth));
-
-    // Build router
+    // Build router (V1: Infrastructure + Reference Data only)
     let app = Router::new()
-        // Health check
-        .route("/health", get(|| async { "OK" }))
-
-        // Public routes
-        .route("/api/jobs", get(handlers::list_jobs))
-        .route("/api/jobs/{id}", get(handlers::get_job))
-
-        // Auth routes
-        .route("/api/auth/register", post(handlers::register))
-        .route("/api/auth/login", post(handlers::login))
-
-        // Merge protected routes
-        .merge(protected_routes)
-
-        // CORS middleware
+        // Health check routes
+        .route("/api/health", get(handlers::health))
+        .route("/api/health/ready", get(handlers::readiness))
+        // Merge reference data routes
+        .merge(reference_routes)
+        // Middleware layers
+        .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
-
         // Application state
         .with_state(app_state);
 
     // Start server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
     tracing::info!("Server listening on {}", listener.local_addr()?);
     axum::serve(listener, app).await?;
 

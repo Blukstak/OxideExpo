@@ -1,58 +1,148 @@
 version: '3.8'
 
+# EmpleosInclusivos Development Infrastructure
 # Profiles:
-# - full: All services (backend + frontend + database)
-# - backend: Backend + database only
+# - full: All services (backend + frontend + databases)
+# - backend: Backend + all data services
 # - frontend: Frontend only (assumes backend running elsewhere)
+# - services: Infrastructure services only (for local cargo development)
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL 16 Database
   postgres:
-    image: postgres:15-alpine
-    container_name: oxideexpo-postgres
-    profiles: ["full", "backend"]
-
+    image: postgres:16-alpine
+    container_name: empleos-postgres
+    profiles: ["full", "backend", "services"]
     environment:
       POSTGRES_DB: empleos_inclusivos
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-
+      POSTGRES_USER: empleos
+      POSTGRES_PASSWORD: empleos
     ports:
       - "5432:5432"
-
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
-
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U empleos -d empleos_inclusivos"]
       interval: 5s
       timeout: 5s
       retries: 5
-
     networks:
-      - oxideexpo-network
+      - empleos-network
+
+  # Redis 7 for caching and JWT blacklist
+  redis:
+    image: redis:7-alpine
+    container_name: empleos-redis
+    profiles: ["full", "backend", "services"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - empleos-network
+
+  # MinIO S3-compatible storage
+  minio:
+    image: minio/minio:latest
+    container_name: empleos-minio
+    profiles: ["full", "backend", "services"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - empleos-network
+
+  # Create default bucket on startup
+  minio-init:
+    image: minio/mc:latest
+    container_name: empleos-minio-init
+    profiles: ["full", "backend", "services"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/empleos-inclusivos --ignore-existing;
+      mc anonymous set download myminio/empleos-inclusivos/public;
+      exit 0;
+      "
+    networks:
+      - empleos-network
+
+  # Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: empleos-mailhog
+    profiles: ["full", "backend", "services"]
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    networks:
+      - empleos-network
 
   # Rust Backend
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: oxideexpo-backend
+    container_name: empleos-backend
     profiles: ["full", "backend"]
-
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/empleos_inclusivos
-      JWT_SECRET: dev-secret-key-change-in-production
-      RUST_LOG: info
-
+      # Application
+      APP_ENV: development
+      APP_PORT: 3000
+      APP_BASE_URL: http://localhost:3000
+      FRONTEND_URL: http://localhost:3001
+      # Database
+      DATABASE_URL: postgres://empleos:empleos@postgres:5432/empleos_inclusivos
+      DATABASE_MAX_CONNECTIONS: 10
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # JWT
+      JWT_SECRET: dev-secret-key-at-least-32-characters-long
+      JWT_ACCESS_EXPIRY: 900
+      JWT_REFRESH_EXPIRY: 604800
+      # Storage (S3/MinIO)
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      S3_BUCKET: empleos-inclusivos
+      S3_REGION: us-east-1
+      S3_PUBLIC_URL: http://localhost:9000/empleos-inclusivos
+      # Email
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_USER: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: noreply@empleosinclusivos.cl
+      # Logging
+      RUST_LOG: info,sqlx=warn,tower_http=debug
     ports:
-      - "8080:8080"
-
+      - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
-
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
       # Source code for hot reload
       - ./backend:/app:cached
@@ -60,10 +150,8 @@ services:
       - cargo-cache:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
       - cargo-target:/app/target
-
     networks:
-      - oxideexpo-network
-
+      - empleos-network
     command: cargo watch -x run
 
   # Next.js Frontend
@@ -71,34 +159,31 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    container_name: oxideexpo-frontend
+    container_name: empleos-frontend
     profiles: ["full", "frontend"]
-
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8080/api
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api
       NODE_ENV: development
-
     ports:
-      - "3000:3000"
-
+      - "3001:3000"
     volumes:
       # Source code for hot reload
       - ./frontend:/app:cached
       # Node modules cache
       - node_modules:/app/node_modules
       - next-cache:/app/.next
-
     networks:
-      - oxideexpo-network
-
+      - empleos-network
     command: npm run dev
 
 networks:
-  oxideexpo-network:
+  empleos-network:
     driver: bridge
 
 volumes:
   postgres-data:
+  redis-data:
+  minio-data:
   cargo-cache:
   cargo-git:
   cargo-target:
