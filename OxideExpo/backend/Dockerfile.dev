@@ -1,0 +1,21 @@
+FROM rust:1.75-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install cargo-watch for hot reload
+RUN cargo install cargo-watch sqlx-cli
+
+# Copy only Cargo.toml first for caching
+COPY Cargo.toml ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build && rm -rf src
+
+# The actual source will be mounted as volume
+CMD ["cargo", "watch", "-x", "run"]

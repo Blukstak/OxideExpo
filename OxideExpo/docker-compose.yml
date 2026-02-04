@@ -1,0 +1,106 @@
+version: '3.8'
+
+# Profiles:
+# - full: All services (backend + frontend + database)
+# - backend: Backend + database only
+# - frontend: Frontend only (assumes backend running elsewhere)
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: oxideexpo-postgres
+    profiles: ["full", "backend"]
+
+    environment:
+      POSTGRES_DB: empleos_inclusivos
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - oxideexpo-network
+
+  # Rust Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: oxideexpo-backend
+    profiles: ["full", "backend"]
+
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/empleos_inclusivos
+      JWT_SECRET: dev-secret-key-change-in-production
+      RUST_LOG: info
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    volumes:
+      # Source code for hot reload
+      - ./backend:/app:cached
+      # Cargo cache
+      - cargo-cache:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - cargo-target:/app/target
+
+    networks:
+      - oxideexpo-network
+
+    command: cargo watch -x run
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: oxideexpo-frontend
+    profiles: ["full", "frontend"]
+
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080/api
+      NODE_ENV: development
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      # Source code for hot reload
+      - ./frontend:/app:cached
+      # Node modules cache
+      - node_modules:/app/node_modules
+      - next-cache:/app/.next
+
+    networks:
+      - oxideexpo-network
+
+    command: npm run dev
+
+networks:
+  oxideexpo-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  cargo-cache:
+  cargo-git:
+  cargo-target:
+  node_modules:
+  next-cache:

@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  oxide-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: oxide-backend-dev
+
+    volumes:
+      # Source code (bind mount for live editing)
+      - ../:/workspace:cached
+
+      # Cargo cache (persistent across rebuilds)
+      - cargo-cache:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - cargo-target:/workspace/target
+
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/empleos_inclusivos
+      JWT_SECRET: dev-secret-key-change-in-production
+      RUST_LOG: info
+      CARGO_HOME: /usr/local/cargo
+
+    ports:
+      - "8080:8080"
+      - "5432:5432"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    # Security hardening
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    security_opt:
+      - no-new-privileges:true
+
+    command: sleep infinity
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: oxide-postgres
+
+    environment:
+      POSTGRES_DB: empleos_inclusivos
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../migrations:/docker-entrypoint-initdb.d
+
+    ports:
+      - "5432:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  cargo-cache:
+  cargo-git:
+  cargo-target:
+  postgres-data:

@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: oxideexpo-frontend-dev
+
+    volumes:
+      # Source code (bind mount for live editing)
+      - ../:/workspace:cached
+
+      # Node modules cache (persistent across rebuilds)
+      - node_modules:/workspace/node_modules
+      - next-cache:/workspace/.next
+
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080/api
+      NODE_ENV: development
+
+    ports:
+      - "3000:3000"
+
+    # Security hardening
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+
+    security_opt:
+      - no-new-privileges:true
+
+    command: sleep infinity
+
+volumes:
+  node_modules:
+  next-cache:

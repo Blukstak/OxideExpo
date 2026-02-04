@@ -1,0 +1,40 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
+{
+	"name": "EmpleosInclusivos",
+	"image": "mcr.microsoft.com/devcontainers/base:noble",
+
+	// Docker-in-Docker for running OxideExpo services
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {
+			"version": "latest",
+			"moby": true,
+			"dockerDashComposeVersion": "v2"
+		}
+	},
+
+	// Persist Docker volumes across dev container rebuilds
+	"mounts": [
+		"source=empleos-docker-volumes,target=/var/lib/docker/volumes,type=volume"
+	],
+
+	// Forward ports for OxideExpo services
+	"forwardPorts": [
+		3000,  // Frontend (Next.js)
+		8080,  // Backend (Rust)
+		5432   // PostgreSQL
+	],
+
+	// Start OxideExpo services on container creation
+	"postCreateCommand": "cd OxideExpo && docker compose -f docker-compose.dev.yml up -d",
+
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"ms-azuretools.vscode-docker"
+			]
+		}
+	},
+
+	"remoteUser": "vscode"
+}

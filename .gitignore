@@ -1,0 +1,52 @@
+# Dev Container
+.devcontainer/.env
+
+# OxideExpo - Rust Backend
+OxideExpo/backend/target/
+OxideExpo/backend/.env
+OxideExpo/backend/Cargo.lock
+
+# OxideExpo - Next.js Frontend
+OxideExpo/frontend/node_modules/
+OxideExpo/frontend/.next/
+OxideExpo/frontend/.env*.local
+OxideExpo/frontend/.turbo
+OxideExpo/frontend/out/
+
+# Laravel/Laminas Project
+Laravel/vendor/
+Laravel/config/development.config.php
+Laravel/data/cache/*
+!Laravel/data/cache/.gitkeep
+Laravel/phpunit.xml
+Laravel/coverage/
+Laravel/node_modules/
+Laravel/.scannerwork/
+Laravel/*.pdf
+Laravel/*.xlsx
+Laravel/cron-jobs.sh
+Laravel/react/node_modules/
+Laravel/react/dist/
+Laravel/public/uploads/
+Laravel/react/stand/node_modules/
+Laravel/react/home/node_modules/
+
+# Nested git repo (Laravel has its own)
+Laravel/.git/
+
+# IDEs
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docker volumes
+postgres_data/
