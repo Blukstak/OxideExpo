@@ -199,8 +199,8 @@ Fail fast with clear error messages if missing.
 | 7 | Health check endpoints | Low | Pending |
 | 8 | Env var validation | Low | Pending |
 | 9 | Playwright E2E test setup | Medium | COMPLETED |
-| 10 | Frontend security updates | **CRITICAL** | Pending |
-| 11 | Backend dependency updates | High | Pending |
+| 10 | Frontend security updates | **CRITICAL** | COMPLETED |
+| 11 | Backend dependency updates | High | COMPLETED |
 | 12 | Frontend optional updates | Low | Pending |
 
 **Test Results:**

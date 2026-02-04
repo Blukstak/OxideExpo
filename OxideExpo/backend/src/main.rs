@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Public routes
         .route("/api/jobs", get(handlers::list_jobs))
-        .route("/api/jobs/:id", get(handlers::get_job))
+        .route("/api/jobs/{id}", get(handlers::get_job))
 
         // Auth routes
         .route("/api/auth/register", post(handlers::register))
