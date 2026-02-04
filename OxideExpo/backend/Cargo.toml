@@ -40,8 +40,11 @@ redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
 ts-rs = { version = "10", features = ["chrono-impl", "uuid-impl"] }
 
 # Authentication
-jsonwebtoken = "10"
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 argon2 = "0.5"
+rand = "0.8"
+hex = "0.4"
+sha2 = "0.10"
 
 # Validation
 validator = { version = "0.18", features = ["derive"] }

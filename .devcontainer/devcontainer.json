@@ -29,7 +29,8 @@
 	],
 
 	// Start OxideExpo services and setup Playwright for e2e tests
-	"postCreateCommand": "cd OxideExpo && docker compose -f docker-compose.dev.yml up -d && cd frontend && npm install && npx playwright install --with-deps chromium",
+	// First cleanup any orphaned containers from previous sessions
+	"postCreateCommand": "cd OxideExpo && docker rm -f empleos_db_dev empleos_backend_dev empleos_frontend_dev 2>/dev/null || true && docker compose -f docker-compose.dev.yml down --remove-orphans && docker compose -f docker-compose.dev.yml up -d && cd frontend && npm install && npx playwright install --with-deps chromium",
 
 	"customizations": {
 		"vscode": {

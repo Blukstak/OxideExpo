@@ -1,8 +1,23 @@
 # EmpleosInclusivos - Implementation Verticals
 
-**Version:** 2.0
+**Version:** 2.1
 **Date:** 2026-02-04
 **Prerequisites:** [ARCHITECTURE_PLAN.md](ARCHITECTURE_PLAN.md), [CAPABILITIES_CHECKLIST.md](CAPABILITIES_CHECKLIST.md)
+
+---
+
+## Current Status
+
+| Vertical | Status | Tests | Notes |
+|----------|--------|-------|-------|
+| V1 Infrastructure | ✅ Complete | 16/16 | All services operational |
+| V2 Authentication | ✅ Complete | 24/24 | OAuth deferred to later |
+| V3 Job Seeker Core | 🔲 Not Started | — | **Ready to start** |
+| V4 Company Core | 🔲 Not Started | — | **Ready to start** |
+| V5 OMIL Core | 🔲 Not Started | — | **Ready to start** |
+| V6-V13 | 🔲 Not Started | — | Blocked by V3-V5 |
+
+**Next Steps:** V3, V4, V5 can be built in parallel. Recommended starting point is **V3 Job Seeker Core** (most user-facing value).
 
 ---
 
@@ -121,12 +136,14 @@ GET  /api/reference/skill-categories List skill categories
 ```
 
 ### Acceptance Criteria
-- [ ] `docker-compose up` starts PostgreSQL, Redis, MinIO, Mailhog
-- [ ] Database migrations run successfully
-- [ ] Reference data is seeded (countries, regions, etc.)
-- [ ] `/api/health` returns `{"status": "healthy"}` with service checks
-- [ ] All reference endpoints return seeded data
-- [ ] TypeScript types generated via ts-rs
+- [x] `docker-compose up` starts PostgreSQL, Redis, MinIO, Mailhog
+- [x] Database migrations run successfully
+- [x] Reference data is seeded (countries, regions, etc.)
+- [x] `/api/health` returns `{"status": "healthy"}` with service checks
+- [x] All reference endpoints return seeded data
+- [x] TypeScript types generated via ts-rs
+
+**Completed:** 2026-02-04 | **E2E Tests:** `frontend/e2e/v1-infrastructure.spec.ts` (16 tests)
 
 ### Critical Pattern: AppState
 This pattern is used throughout all handlers:
@@ -200,17 +217,21 @@ POST /api/auth/email/resend          Resend verification
 - [CAPABILITIES_CHECKLIST.md § 4.1](CAPABILITIES_CHECKLIST.md) Admin Auth
 
 ### Acceptance Criteria
-- [ ] Job seeker can register with email/password
-- [ ] Job seeker can register via Google OAuth
-- [ ] Job seeker can register via LinkedIn OAuth
-- [ ] Company admin can register company (pending approval)
-- [ ] OMIL admin can register organization (pending approval)
-- [ ] All user types can login and receive JWT
-- [ ] Protected endpoints reject requests without valid JWT
-- [ ] Password recovery email is sent
-- [ ] Password reset with valid token works
-- [ ] Logout invalidates token (blacklist check)
-- [ ] Refresh token rotation works
+- [x] Job seeker can register with email/password
+- [ ] Job seeker can register via Google OAuth *(deferred)*
+- [ ] Job seeker can register via LinkedIn OAuth *(deferred)*
+- [x] Company admin can register company (pending approval)
+- [x] OMIL admin can register organization (pending approval)
+- [x] All user types can login and receive JWT
+- [x] Protected endpoints reject requests without valid JWT
+- [x] Password recovery email is sent
+- [x] Password reset with valid token works
+- [x] Logout invalidates token (blacklist check)
+- [x] Refresh token rotation works
+
+**Completed:** 2026-02-04 | **E2E Tests:** `frontend/e2e/v2-auth.spec.ts` (24 tests)
+
+**Note:** OAuth integration deferred to post-MVP. Core email/password auth is complete with all security features (token blacklist, refresh rotation, email verification).
 
 ### Critical Pattern: Auth Middleware
 ```rust
@@ -778,33 +799,65 @@ This is a lower-priority feature that extends the platform for special events. I
 
 ## Implementation Timeline
 
-### Phase 1: Foundation (2-3 weeks)
-- V1 Infrastructure
-- V2 Authentication
+### Phase 1: Foundation (2-3 weeks) ✅ COMPLETE
+- ✅ V1 Infrastructure (16 E2E tests)
+- ✅ V2 Authentication (24 E2E tests)
 
-### Phase 2: Core Profiles (3-4 weeks, parallelizable)
-- V3 Job Seeker Core
-- V4 Company Core
-- V5 OMIL Core
+### Phase 2: Core Profiles (3-4 weeks, parallelizable) ← **CURRENT**
+- 🔲 V3 Job Seeker Core
+- 🔲 V4 Company Core
+- 🔲 V5 OMIL Core
 
 ### Phase 3: Job Flow (3-4 weeks)
-- V6 Job Posting
-- V7 Job Discovery
+- 🔲 V6 Job Posting
+- 🔲 V7 Job Discovery
 
 ### Phase 4: Applications (3-4 weeks)
-- V8 Apply to Jobs
-- V9 Manage Applicants
+- 🔲 V8 Apply to Jobs
+- 🔲 V9 Manage Applicants
 
 ### Phase 5: Integration (3-4 weeks)
-- V10 OMIL Integration
-- V11 Admin Dashboard
+- 🔲 V10 OMIL Integration
+- 🔲 V11 Admin Dashboard
 
 ### Phase 6: Analytics (2-3 weeks)
-- V12 Reporting
-- V13 Virtual Fair (if needed)
+- 🔲 V12 Reporting
+- 🔲 V13 Virtual Fair (if needed)
 
 **Total: 16-22 weeks (single developer)**
 **With parallelization in Phase 2: 13-18 weeks**
+
+---
+
+## Recommended Next Steps
+
+### Option A: V3 Job Seeker Core (Recommended)
+Highest user-facing value. Enables job seekers to build complete profiles.
+
+**Key tables to create:**
+- `job_seeker_profiles` - Personal info, disability status
+- `education_records` - All education levels
+- `work_experiences` - Work history
+- `user_skills` - Skills with proficiency
+- `user_languages` - Languages with proficiency
+- `portfolio_items` - Portfolio links/files
+
+**Key endpoints:**
+- `GET/PUT /api/me/profile` - Profile CRUD
+- `CRUD /api/me/education` - Education records
+- `CRUD /api/me/experience` - Work experience
+- `CRUD /api/me/skills` - Skills management
+- File uploads for CV and profile image
+
+### Option B: V4 Company Core
+Enables companies to set up their profiles before job posting.
+
+**Key tables:**
+- `companies` - Company profile
+- `company_members` - Team management
+
+### Option C: Parallel Development
+If multiple developers available, V3, V4, V5 can be built simultaneously since they only depend on V1+V2 (both complete)
 
 ---
 

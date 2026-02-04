@@ -3,7 +3,9 @@ pub mod reference;
 
 pub use reference::*;
 
-// V2+ Models (to be updated for new schema)
-// pub mod user;
+// V2: User & Authentication Models
+pub mod user;
+
+// V3+ Models (to be implemented)
 // pub mod job;
 // pub mod application;

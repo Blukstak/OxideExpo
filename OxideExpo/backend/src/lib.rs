@@ -4,10 +4,10 @@ pub mod handlers;
 pub mod models;
 pub mod services;
 
-// V2+ modules (to be updated)
-// pub mod error;
-// pub mod middleware;
-// pub mod utils;
+// V2: Authentication
+pub mod error;
+pub mod middleware;
+pub mod utils;
 
 use aws_sdk_s3::Client as S3Client;
 use config::Config;

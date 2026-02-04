@@ -35,5 +35,5 @@
   "postCreateCommand": "npm --version && node --version",
   "postStartCommand": "echo 'Frontend dev container ready!'",
 
-  "remoteUser": "developer"
+  "remoteUser": "vscode"
 }

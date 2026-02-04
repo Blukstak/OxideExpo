@@ -14,7 +14,11 @@ services:
 
       # Node modules cache (persistent across rebuilds)
       - node_modules:/workspace/node_modules
-      - next-cache:/workspace/.next
+
+      # Next.js build cache (DISABLED by default - can cause permission issues)
+      # Uncomment to persist .next directory across container rebuilds for faster startup
+      # Note: May cause stale cache issues. Only enable if startup time is a concern.
+      # - next-cache:/workspace/.next
 
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8080/api
@@ -38,4 +42,4 @@ services:
 
 volumes:
   node_modules:
-  next-cache:
+  # next-cache:  # Uncomment if enabling next-cache volume above

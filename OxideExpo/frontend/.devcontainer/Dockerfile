@@ -7,14 +7,14 @@ RUN apt-get update && apt-get install -y \
     sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd -m -s /bin/bash -u 1000 developer && \
-    echo "developer ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+# Create non-root user (vscode user for VS Code dev containers)
+RUN useradd -m -s /bin/bash -u 1000 vscode && \
+    echo "vscode ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Set up workspace
 WORKDIR /workspace
-RUN chown -R developer:developer /workspace
+RUN chown -R vscode:vscode /workspace
 
-USER developer
+USER vscode
 
 CMD ["sleep", "infinity"]

@@ -5,7 +5,9 @@ pub mod reference;
 pub use health::*;
 pub use reference::*;
 
-// V2+ Handlers (to be updated for new schema)
-// pub mod auth;
+// V2 Handlers: Authentication
+pub mod auth;
+
+// V3+ Handlers (to be implemented)
 // pub mod applications;
 // pub mod jobs;
