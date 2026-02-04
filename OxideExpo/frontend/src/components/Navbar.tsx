@@ -18,7 +18,7 @@ export function Navbar() {
             {isAuthenticated ? (
               <>
                 <span className="text-sm">
-                  Hola, {user?.nombre}
+                  Hola, {user?.first_name}
                 </span>
                 <Link
                   href="/my-applications"

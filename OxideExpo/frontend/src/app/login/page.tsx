@@ -23,7 +23,7 @@ export default function LoginPage() {
       return authApi.login(data);
     },
     onSuccess: (data) => {
-      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_token', data.access_token);
       setUser(data.user);
       router.push('/');
     },

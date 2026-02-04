@@ -20,7 +20,14 @@ api.interceptors.request.use((config) => {
 
 export const authApi = {
   register: async (data: RegisterFormData): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>('/auth/register', data);
+    // Transform Spanish field names to English for backend compatibility
+    const backendData = {
+      email: data.email,
+      password: data.password,
+      first_name: data.nombre,
+      last_name: data.apellidos,
+    };
+    const response = await api.post<AuthResponse>('/auth/register', backendData);
     return response.data;
   },
 

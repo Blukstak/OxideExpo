@@ -2,24 +2,22 @@
 // Run: npm run type-gen to generate these from Rust
 
 export interface User {
-  id: number;
+  id: string;
   email: string;
-  nombre: string;
-  apellidos: string;
-  rut: string;
-  telefono?: string;
-  region_id?: number;
+  first_name: string;
+  last_name: string;
   user_type: string;
-  status: string;
+  account_status: string;
   email_verified: boolean;
   created_at: string;
-  updated_at: string;
 }
 
 export interface AuthResponse {
   user: User;
-  token: string;
-  expires_at: string;
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
 }
 
 export interface Job {

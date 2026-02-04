@@ -20,7 +20,7 @@ export default function RegisterPage() {
   const registerMutation = useMutation({
     mutationFn: authApi.register,
     onSuccess: (data) => {
-      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('auth_token', data.access_token);
       setUser(data.user);
       router.push('/');
     },
