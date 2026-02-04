@@ -9,7 +9,9 @@ pub mod user;
 // V3: Job Seeker Profile Models
 pub mod profile;
 
-// V4+ Models (to be implemented)
-// pub mod company;
+// V4: Company Profile Models
+pub mod company;
+
+// V5+ Models (to be implemented)
 // pub mod job;
 // pub mod application;

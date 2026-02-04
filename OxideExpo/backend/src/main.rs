@@ -157,7 +157,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             require_auth,
         ));
 
-    // Build router (V1: Infrastructure + Reference Data, V2: Auth, V3: Profiles)
+    // V4: Company Profile routes (protected)
+    let company_routes = Router::new()
+        .route(
+            "/api/me/company/profile",
+            get(handlers::company::get_company_profile)
+                .put(handlers::company::update_company_profile),
+        )
+        .route(
+            "/api/me/company/full",
+            get(handlers::company::get_full_company_profile),
+        )
+        .route(
+            "/api/me/company/members",
+            get(handlers::company::list_members),
+        )
+        .route(
+            "/api/me/company/members/{id}",
+            put(handlers::company::update_member).delete(handlers::company::remove_member),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V4: Public company routes (no auth required)
+    let company_public_routes = Router::new()
+        .route("/api/companies", get(handlers::company::list_public_companies))
+        .route(
+            "/api/companies/{id}",
+            get(handlers::company::get_public_company),
+        );
+
+    // Build router (V1: Infrastructure + Reference Data, V2: Auth, V3: Profiles, V4: Companies)
     let app = Router::new()
         // Health check routes
         .route("/api/health", get(handlers::health))
@@ -169,6 +201,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(auth_protected_routes)
         // Merge V3 profile routes
         .merge(profile_routes)
+        // Merge V4 company routes
+        .merge(company_routes)
+        .merge(company_public_routes)
         // Middleware layers
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())

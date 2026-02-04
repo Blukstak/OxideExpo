@@ -102,9 +102,10 @@ pub async fn register_company(
     let password_hash = hash_password(&payload.password)
         .map_err(|e| AppError::InternalError(format!("Failed to hash password: {}", e)))?;
 
-    // Note: company_name would be used to create/link to a company record in future
-    let _ = &payload.company_name;
+    // Start transaction to create user + company profile + membership atomically
+    let mut tx = state.db.begin().await?;
 
+    // Create user
     let user = sqlx::query_as!(
         User,
         r#"
@@ -122,7 +123,7 @@ pub async fn register_company(
         UserType::CompanyMember as UserType,
         AccountStatus::PendingVerification as AccountStatus,
     )
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| {
         if e.to_string().contains("unique") || e.to_string().contains("duplicate") {
@@ -131,6 +132,33 @@ pub async fn register_company(
             AppError::DatabaseError(e)
         }
     })?;
+
+    // Create company profile (pending approval)
+    let company = sqlx::query!(
+        r#"
+        INSERT INTO company_profiles (company_name, status)
+        VALUES ($1, 'pending_approval')
+        RETURNING id
+        "#,
+        payload.company_name,
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    // Create company membership (user becomes owner)
+    sqlx::query!(
+        r#"
+        INSERT INTO company_members (company_id, user_id, role, joined_at)
+        VALUES ($1, $2, 'owner', NOW())
+        "#,
+        company.id,
+        user.id,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    // Commit transaction
+    tx.commit().await?;
 
     // Create tokens
     let (access_token, expires_in) =

@@ -11,7 +11,9 @@ pub mod auth;
 // V3 Handlers: Job Seeker Profiles
 pub mod profile;
 
-// V4+ Handlers (to be implemented)
-// pub mod company;
+// V4 Handlers: Company Profiles
+pub mod company;
+
+// V5+ Handlers (to be implemented)
 // pub mod applications;
 // pub mod jobs;
