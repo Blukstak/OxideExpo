@@ -12,6 +12,8 @@ OxideExpo/frontend/.next/
 OxideExpo/frontend/.env*.local
 OxideExpo/frontend/.turbo
 OxideExpo/frontend/out/
+OxideExpo/frontend/playwright-report/
+OxideExpo/frontend/test-results/
 
 # Laravel/Laminas Project
 Laravel/vendor/
@@ -35,7 +37,8 @@ Laravel/react/home/node_modules/
 Laravel/.git/
 
 # IDEs
-.vscode/settings.json
+.vscode/*
+!.vscode/settings.json
 .idea/
 *.swp
 *.swo

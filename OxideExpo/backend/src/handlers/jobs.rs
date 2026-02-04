@@ -4,7 +4,7 @@ use axum::{
 };
 use crate::{
     error::{AppError, Result},
-    models::{Job, JobListQuery, JobListResponse, JobWithCompany},
+    models::{JobListQuery, JobListResponse, JobWithCompany},
     AppState,
 };
 
@@ -33,6 +33,8 @@ pub async fn list_jobs(
     );
 
     // Add filters
+    let search_pattern = params.search.as_ref().map(|s| format!("%{}%", s));
+
     if let Some(category_id) = params.category_id {
         query_builder.push(" AND j.category_id = ");
         query_builder.push_bind(category_id);
@@ -43,12 +45,11 @@ pub async fn list_jobs(
         query_builder.push_bind(region_id);
     }
 
-    if let Some(search) = &params.search {
-        let search_pattern = format!("%{}%", search);
+    if let Some(ref pattern) = search_pattern {
         query_builder.push(" AND (j.title ILIKE ");
-        query_builder.push_bind(&search_pattern);
+        query_builder.push_bind(pattern);
         query_builder.push(" OR j.description ILIKE ");
-        query_builder.push_bind(&search_pattern);
+        query_builder.push_bind(pattern);
         query_builder.push(")");
     }
 
@@ -68,6 +69,8 @@ pub async fn list_jobs(
         "SELECT COUNT(*) as count FROM jobs j WHERE j.status = 'T'"
     );
 
+    let count_search_pattern = params.search.as_ref().map(|s| format!("%{}%", s));
+
     if let Some(category_id) = params.category_id {
         count_builder.push(" AND j.category_id = ");
         count_builder.push_bind(category_id);
@@ -78,12 +81,11 @@ pub async fn list_jobs(
         count_builder.push_bind(region_id);
     }
 
-    if let Some(search) = &params.search {
-        let search_pattern = format!("%{}%", search);
+    if let Some(ref pattern) = count_search_pattern {
         count_builder.push(" AND (j.title ILIKE ");
-        count_builder.push_bind(&search_pattern);
+        count_builder.push_bind(pattern);
         count_builder.push(" OR j.description ILIKE ");
-        count_builder.push_bind(&search_pattern);
+        count_builder.push_bind(pattern);
         count_builder.push(")");
     }
 

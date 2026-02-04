@@ -10,6 +10,9 @@
 			"version": "latest",
 			"moby": true,
 			"dockerDashComposeVersion": "v2"
+		},
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "20"
 		}
 	},
 
@@ -25,13 +28,19 @@
 		5432   // PostgreSQL
 	],
 
-	// Start OxideExpo services on container creation
-	"postCreateCommand": "cd OxideExpo && docker compose -f docker-compose.dev.yml up -d",
+	// Start OxideExpo services and setup Playwright for e2e tests
+	"postCreateCommand": "cd OxideExpo && docker compose -f docker-compose.dev.yml up -d && cd frontend && npm install && npx playwright install --with-deps chromium",
 
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"ms-azuretools.vscode-docker"
+				"ms-azuretools.vscode-docker",
+				"ms-playwright.playwright",
+				"anthropic.claude-code",
+				"rust-lang.rust-analyzer",
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode",
+				"bradlc.vscode-tailwindcss"
 			]
 		}
 	},

@@ -1,0 +1,6 @@
+{
+  "playwright.reuseBrowser": true,
+  "playwright.configs": [
+    "OxideExpo/frontend/playwright.config.ts"
+  ]
+}
