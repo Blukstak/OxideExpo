@@ -80,6 +80,7 @@ services:
   frontend:
     image: node:20-slim
     container_name: empleos_frontend_dev
+    user: "1000:1000"  # Run as vscode user to avoid permission issues with mounted volumes
     working_dir: /app
     command: bash -c "npm install && npm run dev"
     environment:
@@ -93,7 +94,6 @@ services:
       - backend
     volumes:
       - ./frontend:/app
-      - node_modules:/app/node_modules
 
 volumes:
   postgres_data_dev:
@@ -101,4 +101,3 @@ volumes:
   minio_data_dev:
   cargo_cache:
   cargo_target:
-  node_modules:

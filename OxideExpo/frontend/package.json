@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "check-not-root": "node -e \"if(process.getuid && process.getuid()===0){console.error('\\x1b[31mError: Do not run npm as root. This causes permission issues with .next folder.\\x1b[0m');process.exit(1)}\"",
+    "preinstall": "npm run check-not-root",
+    "predev": "npm run check-not-root",
+    "prebuild": "npm run check-not-root",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

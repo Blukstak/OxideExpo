@@ -67,3 +67,392 @@ export interface JobApplication {
   applied_at: string;
   reviewed_at?: string;
 }
+
+// ============================================================================
+// JOB SEEKER PROFILE TYPES
+// ============================================================================
+
+export type Gender = 'male' | 'female' | 'other' | 'prefer_not_to_say';
+export type MaritalStatus = 'single' | 'married' | 'divorced' | 'widowed' | 'domestic_partnership';
+export type EducationLevel = 'basic' | 'secondary' | 'technical' | 'university' | 'postgraduate';
+export type EducationStatus = 'in_progress' | 'completed' | 'incomplete';
+export type LanguageProficiency = 'basic' | 'intermediate' | 'advanced' | 'native';
+export type DisabilityCategory = 'physical' | 'visual' | 'hearing' | 'intellectual' | 'psychosocial' | 'multiple' | 'other';
+export type JobType = 'full_time' | 'part_time' | 'contract' | 'temporary' | 'internship' | 'volunteer';
+
+export interface JobSeekerProfile {
+  user_id: string;
+  phone?: string;
+  date_of_birth?: string;
+  gender?: Gender;
+  marital_status?: MaritalStatus;
+  nationality?: string;
+  national_id?: string;
+  region_id?: string;
+  municipality_id?: string;
+  address?: string;
+  bio?: string;
+  professional_headline?: string;
+  profile_image_url?: string;
+  cv_url?: string;
+  completeness_percentage: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobSeekerDisability {
+  id: string;
+  user_id: string;
+  category: DisabilityCategory;
+  description?: string;
+  has_disability_certificate: boolean;
+  disability_percentage?: number;
+  requires_accommodations: boolean;
+  accommodation_details?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EducationRecord {
+  id: string;
+  user_id: string;
+  institution_id?: string;
+  institution_name: string;
+  level: EducationLevel;
+  field_of_study_id?: string;
+  field_of_study_name?: string;
+  degree_title?: string;
+  status: EducationStatus;
+  start_date: string;
+  end_date?: string;
+  description?: string;
+  achievements?: string;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkExperience {
+  id: string;
+  user_id: string;
+  company_name: string;
+  industry_id?: string;
+  position_title: string;
+  work_area_id?: string;
+  position_level_id?: string;
+  employment_type?: JobType;
+  is_current: boolean;
+  start_date: string;
+  end_date?: string;
+  region_id?: string;
+  municipality_id?: string;
+  description?: string;
+  achievements?: string;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserSkill {
+  id: string;
+  user_id: string;
+  skill_id: string;
+  proficiency_level: number;
+  years_of_experience?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserLanguage {
+  id: string;
+  user_id: string;
+  language_id: string;
+  proficiency: LanguageProficiency;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PortfolioItem {
+  id: string;
+  user_id: string;
+  title: string;
+  description?: string;
+  url?: string;
+  file_url?: string;
+  category?: string;
+  completion_date?: string;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FullProfileResponse {
+  profile: JobSeekerProfile;
+  disability?: JobSeekerDisability;
+  education: EducationRecord[];
+  experience: WorkExperience[];
+  skills: UserSkill[];
+  languages: UserLanguage[];
+  portfolio: PortfolioItem[];
+}
+
+// ============================================================================
+// REFERENCE DATA TYPES
+// ============================================================================
+
+export interface Skill {
+  id: string;
+  name: string;
+  category?: string;
+}
+
+export interface Language {
+  id: string;
+  name: string;
+  code: string;
+}
+
+export interface Region {
+  id: string;
+  name: string;
+  country_id: string;
+}
+
+export interface Municipality {
+  id: string;
+  name: string;
+  region_id: string;
+}
+
+// ============================================================================
+// COMPANY TYPES
+// ============================================================================
+
+export type OrganizationStatus = 'pending_approval' | 'active' | 'suspended' | 'rejected';
+export type MemberRole = 'owner' | 'admin' | 'member';
+
+export interface CompanyProfile {
+  id: string;
+  company_name: string;
+  legal_name?: string;
+  tax_id?: string;
+  industry_id?: string;
+  company_size?: string;
+  founded_year?: number;
+  region_id?: string;
+  municipality_id?: string;
+  address?: string;
+  phone?: string;
+  website_url?: string;
+  linkedin_url?: string;
+  video_url?: string;
+  logo_url?: string;
+  cover_image_url?: string;
+  description?: string;
+  mission?: string;
+  vision?: string;
+  culture?: string;
+  benefits?: string;
+  status: OrganizationStatus;
+  approved_at?: string;
+  approved_by?: string;
+  rejection_reason?: string;
+  is_featured: boolean;
+  can_search_candidates: boolean;
+  completeness_percentage: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyMember {
+  id: string;
+  company_id: string;
+  user_id: string;
+  role: MemberRole;
+  job_title?: string;
+  is_active: boolean;
+  invited_by?: string;
+  invited_at?: string;
+  joined_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyMemberWithUser extends CompanyMember {
+  user: User;
+}
+
+export interface FullCompanyProfileResponse {
+  profile: CompanyProfile;
+  members: CompanyMemberWithUser[];
+  current_user_role: MemberRole;
+}
+
+export interface CompanyDashboard {
+  active_jobs: number;
+  total_applications: number;
+  applications_by_status: ApplicationStatusCount[];
+  trend: TrendDataPoint[];
+  top_jobs: TopJobPerformance[];
+}
+
+export interface ApplicationStatusCount {
+  status: string;
+  count: number;
+}
+
+export interface TrendDataPoint {
+  date: string;
+  count: number;
+}
+
+export interface TopJobPerformance {
+  job_id: string;
+  title: string;
+  applications_count: number;
+  status: string;
+}
+
+export interface CompanyJob {
+  id: string;
+  company_id: string;
+  posted_by: string;
+  title: string;
+  description: string;
+  responsibilities?: string;
+  job_type: string;
+  work_modality?: string;
+  work_schedule?: string;
+  region_id?: string;
+  municipality_id?: string;
+  is_remote_allowed: boolean;
+  education_level?: string;
+  years_experience_min?: number;
+  years_experience_max?: number;
+  salary_min?: number;
+  salary_max?: number;
+  salary_currency?: string;
+  salary_period?: string;
+  benefits?: string;
+  application_deadline?: string;
+  contact_email?: string;
+  vacancies: number;
+  applications_count: number;
+  status: string;
+  approved_at?: string;
+  rejection_reason?: string;
+  is_featured: boolean;
+  views_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobApplicant {
+  id: string;
+  job_id: string;
+  user_id: string;
+  cover_letter?: string;
+  cv_url?: string;
+  status: string;
+  applied_at: string;
+  reviewed_at?: string;
+  reviewed_by?: string;
+  rejection_reason?: string;
+  // User info
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  profile_image_url?: string;
+}
+
+// ============================================================================
+// ADMIN TYPES
+// ============================================================================
+
+export interface AdminDashboardStats {
+  total_users: number;
+  new_users_today: number;
+  new_users_this_week: number;
+  new_users_this_month: number;
+  total_companies: number;
+  pending_companies: number;
+  active_companies: number;
+  total_jobs: number;
+  active_jobs: number;
+  pending_jobs: number;
+  total_applications: number;
+  flagged_content_pending: number;
+}
+
+export interface UserListItem {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  user_type: string;
+  account_status: string;
+  email_verified_at?: string;
+  created_at: string;
+}
+
+export interface UserDetail extends UserListItem {
+  updated_at: string;
+  company_id?: string;
+  company_name?: string;
+  omil_id?: string;
+  omil_name?: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  admin_id: string;
+  action_type: string;
+  entity_type: string;
+  entity_id: string;
+  details?: Record<string, unknown>;
+  ip_address?: string;
+  created_at: string;
+}
+
+export interface UserTrendsReport {
+  total_users: number;
+  new_users_period: number;
+  by_type: UserTypeCount[];
+  trend: TrendDataPoint[];
+}
+
+export interface UserTypeCount {
+  user_type: string;
+  count: number;
+}
+
+export interface CompanyTrendsReport {
+  total_companies: number;
+  active_companies: number;
+  pending_companies: number;
+  new_companies_period: number;
+  trend: TrendDataPoint[];
+}
+
+export interface JobTrendsReport {
+  total_jobs: number;
+  active_jobs: number;
+  pending_jobs: number;
+  new_jobs_period: number;
+  trend: TrendDataPoint[];
+}
+
+export interface ApplicationTrendsReport {
+  total_applications: number;
+  new_applications_period: number;
+  by_status: ApplicationStatusCount[];
+  trend: TrendDataPoint[];
+}

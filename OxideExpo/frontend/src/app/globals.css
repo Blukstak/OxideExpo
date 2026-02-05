@@ -2,28 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
+@layer base {
+  /* Clean, accessible base styles */
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+  /* Ensure proper focus visibility for keyboard navigation */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand ring-offset-2;
+  }
+
+  /* Remove default focus styles, we use focus-visible */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Better link defaults */
+  a {
+    @apply transition-colors duration-200;
+  }
+
+  /* Form inputs base styling */
+  input,
+  textarea,
+  select {
+    @apply text-gray-900;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-gray-500;
   }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+@layer components {
+  /* Reusable button base */
+  .btn {
+    @apply px-4 py-2 font-medium rounded-lg transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand text-white hover:bg-brand-hover focus:ring-brand;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white border border-gray-300 text-gray-700
+           hover:bg-gray-50 focus:ring-gray-400;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-white rounded-lg border border-gray-200;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-lg transition-shadow duration-200;
+  }
 }
 
 @layer utilities {

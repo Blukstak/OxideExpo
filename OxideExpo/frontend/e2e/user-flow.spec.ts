@@ -1,8 +1,25 @@
 import { test, expect } from '@playwright/test';
+import { goToHomeAndWaitForCountdown } from './helpers';
+
+test.describe('Countdown Timer', () => {
+  test('shows countdown before job listings in development', async ({ page }) => {
+    await page.goto('/');
+
+    // Should initially show countdown
+    await expect(page.locator('text=Próximamente')).toBeVisible();
+    await expect(page.locator('text=La feria de empleo está por comenzar')).toBeVisible();
+
+    // Wait for countdown to complete (5 seconds in dev + buffer)
+    await expect(page.locator('h1:has-text("Ofertas Laborales")')).toBeVisible({ timeout: 10000 });
+
+    // Countdown should be gone
+    await expect(page.locator('text=Próximamente')).not.toBeVisible();
+  });
+});
 
 test.describe('Job Application Flow', () => {
   test('user can browse jobs without login', async ({ page }) => {
-    await page.goto('/');
+    await goToHomeAndWaitForCountdown(page);
 
     await expect(page.locator('h1')).toContainText('Ofertas Laborales');
 
@@ -16,8 +33,8 @@ test.describe('Job Application Flow', () => {
     const timestamp = Date.now();
     const testEmail = `testuser${timestamp}@example.com`;
 
-    // 1. Go to home page
-    await page.goto('/');
+    // 1. Go to home page and wait for countdown
+    await goToHomeAndWaitForCountdown(page);
     await expect(page.locator('h1')).toContainText('Ofertas Laborales');
 
     // 2. Click register
@@ -46,8 +63,8 @@ test.describe('Job Application Flow', () => {
     if (await firstJob.count() > 0) {
       await firstJob.click();
 
-      // Wait for job detail page
-      await expect(page).toHaveURL(/\/jobs\/\d+/);
+      // Wait for job detail page (job IDs are UUIDs)
+      await expect(page).toHaveURL(/\/jobs\/[a-f0-9-]+/);
 
       // 6. Click apply button
       await page.click('text=Postular a esta oferta');
@@ -69,8 +86,11 @@ test.describe('Job Application Flow', () => {
     await page.click('text=Mis Postulaciones');
     await expect(page).toHaveURL('/my-applications');
 
+    // Wait for page to load (may show loading first)
+    await page.waitForLoadState('networkidle');
+
     // Should see at least one application if we applied
-    await expect(page.locator('h1')).toContainText('Mis Postulaciones');
+    await expect(page.locator('h1')).toContainText('Mis Postulaciones', { timeout: 10000 });
   });
 
   test('registration form validates inputs', async ({ page }) => {
@@ -136,7 +156,7 @@ test.describe('Job Application Flow', () => {
   });
 
   test('job search filters work', async ({ page }) => {
-    await page.goto('/');
+    await goToHomeAndWaitForCountdown(page);
 
     // Type in search box
     await page.fill('input[placeholder*="Buscar"]', 'Desarrollador');
