@@ -13,6 +13,7 @@ use aws_sdk_s3::Client as S3Client;
 use config::Config;
 use redis::aio::ConnectionManager;
 use services::email::EmailService;
+use services::storage::StorageService;
 use sqlx::PgPool;
 use std::sync::Arc;
 
@@ -30,6 +31,9 @@ pub struct AppState {
 
     /// Email service for sending transactional emails
     pub email: EmailService,
+
+    /// V9: Storage service using object_store for S3/MinIO/R2 compatibility
+    pub storage: Option<StorageService>,
 
     /// Application configuration
     pub config: Arc<Config>,
@@ -75,6 +79,26 @@ impl AppState {
         tracing::info!("Initializing email service...");
         let email = EmailService::new(&config)?;
 
+        // Initialize storage service (object_store based)
+        tracing::info!("Initializing storage service...");
+        let storage = match StorageService::new(
+            &config.s3_endpoint,
+            &config.s3_bucket,
+            &config.s3_access_key,
+            &config.s3_secret_key,
+            &config.s3_region,
+            Some(config.s3_public_url.clone()),
+        ) {
+            Ok(s) => {
+                tracing::info!("Storage service initialized successfully");
+                Some(s)
+            }
+            Err(e) => {
+                tracing::warn!("Storage service initialization failed: {:?}. File uploads will be unavailable.", e);
+                None
+            }
+        };
+
         let config = Arc::new(config);
 
         Ok(Self {
@@ -82,6 +106,7 @@ impl AppState {
             redis,
             s3,
             email,
+            storage,
             config,
         })
     }

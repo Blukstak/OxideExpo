@@ -1,8 +1,12 @@
-use axum::{middleware, routing::{get, post, put}, Router};
+use axum::{middleware, routing::{get, patch, post, put}, Router};
+use axum::routing::delete;
 use empleos_inclusivos_backend::{
     config::Config,
     handlers::{self, auth, profile},
-    middleware::require_auth,
+    middleware::{
+        require_admin, require_auth, require_omil, require_omil_coordinator_or_above,
+        require_omil_director,
+    },
     AppState,
 };
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -189,7 +193,351 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             get(handlers::company::get_public_company),
         );
 
-    // Build router (V1: Infrastructure + Reference Data, V2: Auth, V3: Profiles, V4: Companies)
+    // V5: Job Management routes (protected - company members)
+    let job_routes = Router::new()
+        .route(
+            "/api/me/jobs",
+            get(handlers::jobs::list_company_jobs).post(handlers::jobs::create_job),
+        )
+        .route(
+            "/api/me/jobs/{id}",
+            get(handlers::jobs::get_job_with_applications)
+                .put(handlers::jobs::update_job)
+                .delete(handlers::jobs::delete_job),
+        )
+        .route(
+            "/api/me/jobs/{id}/status",
+            patch(handlers::jobs::update_job_status),
+        )
+        .route(
+            "/api/me/jobs/{id}/applications",
+            get(handlers::jobs::list_job_applications),
+        )
+        .route(
+            "/api/me/jobs/{job_id}/applications/{app_id}",
+            put(handlers::jobs::update_application_status),
+        )
+        .route(
+            "/api/me/jobs/{job_id}/applications/{app_id}/notes",
+            post(handlers::jobs::add_application_note),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V5: Application routes (protected - job seekers)
+    let application_routes = Router::new()
+        .route(
+            "/api/me/applications",
+            get(handlers::applications::list_my_applications)
+                .post(handlers::applications::submit_application),
+        )
+        .route(
+            "/api/me/applications/{id}",
+            get(handlers::applications::get_application),
+        )
+        .route(
+            "/api/me/applications/{id}/withdraw",
+            patch(handlers::applications::withdraw_application),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V5: Public job listings (no auth)
+    let job_public_routes = Router::new()
+        .route("/api/jobs", get(handlers::applications::list_public_jobs))
+        .route("/api/jobs/{id}", get(handlers::applications::get_public_job));
+
+    // V6: Admin dashboard routes (protected - admin only)
+    let admin_routes = Router::new()
+        // Dashboard & analytics
+        .route(
+            "/api/admin/dashboard/stats",
+            get(handlers::admin::get_dashboard_stats),
+        )
+        // Company management (super admin only)
+        .route(
+            "/api/admin/companies/pending",
+            get(handlers::admin::list_pending_companies),
+        )
+        .route(
+            "/api/admin/companies/{id}/approve",
+            patch(handlers::admin::approve_company),
+        )
+        .route(
+            "/api/admin/companies/{id}/reject",
+            patch(handlers::admin::reject_company),
+        )
+        // Job moderation (moderator or above)
+        .route(
+            "/api/admin/jobs/pending",
+            get(handlers::admin::list_pending_jobs),
+        )
+        .route(
+            "/api/admin/jobs/{id}/approve",
+            patch(handlers::admin::approve_job),
+        )
+        .route(
+            "/api/admin/jobs/{id}/reject",
+            patch(handlers::admin::reject_job),
+        )
+        // Require authentication first, then admin privileges
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_admin,
+        ))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V7: Matching routes (protected - job seekers)
+    let matching_routes = Router::new()
+        .route(
+            "/api/me/recommended-jobs",
+            get(handlers::matching::get_recommended_jobs),
+        )
+        .route(
+            "/api/me/preferences",
+            get(handlers::matching::get_preferences).put(handlers::matching::update_preferences),
+        )
+        .route(
+            "/api/me/jobs/{id}/recommended-candidates",
+            get(handlers::matching::get_recommended_candidates),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V7: Job match score route (protected - job seekers)
+    let match_score_routes = Router::new()
+        .route(
+            "/api/jobs/{id}/match-score",
+            get(handlers::matching::get_job_match_score),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V8: OMIL routes (protected - any OMIL member)
+    let omil_routes = Router::new()
+        // Organization management
+        .route(
+            "/api/me/omil",
+            get(handlers::omil::get_omil_organization),
+        )
+        .route(
+            "/api/me/omil/stats",
+            get(handlers::omil::get_omil_stats),
+        )
+        // Member listing (any member can view)
+        .route(
+            "/api/me/omil/members",
+            get(handlers::omil::list_omil_members),
+        )
+        // Managed job seekers
+        .route(
+            "/api/me/omil/job-seekers",
+            get(handlers::omil::list_managed_job_seekers)
+                .post(handlers::omil::register_job_seeker_on_behalf),
+        )
+        .route(
+            "/api/me/omil/job-seekers/{id}",
+            get(handlers::omil::get_managed_job_seeker),
+        )
+        .route(
+            "/api/me/omil/job-seekers/{id}/placement",
+            put(handlers::omil::update_placement),
+        )
+        .route(
+            "/api/me/omil/job-seekers/{id}/apply",
+            post(handlers::omil::apply_on_behalf),
+        )
+        // Followups
+        .route(
+            "/api/me/omil/job-seekers/{id}/followups",
+            get(handlers::omil::list_followups).post(handlers::omil::create_followup),
+        )
+        .route(
+            "/api/me/omil/followups/{id}",
+            put(handlers::omil::update_followup).delete(handlers::omil::delete_followup),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_omil,
+        ))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V8: OMIL coordinator+ routes (protected - coordinator or director only)
+    let omil_coordinator_routes = Router::new()
+        .route(
+            "/api/me/omil/members",
+            post(handlers::omil::add_omil_member),
+        )
+        .route(
+            "/api/me/omil/members/{id}",
+            put(handlers::omil::update_omil_member),
+        )
+        .route(
+            "/api/me/omil/job-seekers/{id}/advisor",
+            put(handlers::omil::assign_advisor),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_omil_coordinator_or_above,
+        ))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V8: OMIL director routes (protected - director only)
+    let omil_director_routes = Router::new()
+        .route(
+            "/api/me/omil",
+            put(handlers::omil::update_omil_organization),
+        )
+        .route(
+            "/api/me/omil/members/{id}",
+            delete(handlers::omil::remove_omil_member),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_omil_director,
+        ))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V8: Job invitation routes - company side (protected - company members)
+    let invitation_company_routes = Router::new()
+        .route(
+            "/api/me/jobs/{job_id}/invitations",
+            get(handlers::invitations::list_job_invitations)
+                .post(handlers::invitations::send_job_invitation),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V8: Job invitation routes - job seeker side (protected - job seekers)
+    let invitation_seeker_routes = Router::new()
+        .route(
+            "/api/me/invitations",
+            get(handlers::invitations::list_my_invitations),
+        )
+        .route(
+            "/api/me/invitations/{id}",
+            get(handlers::invitations::get_invitation),
+        )
+        .route(
+            "/api/me/invitations/{id}/respond",
+            post(handlers::invitations::respond_to_invitation),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V9: Enhanced Applicant Management routes (protected - company members)
+    let applicant_routes = Router::new()
+        .route(
+            "/api/me/jobs/{id}/applicants",
+            get(handlers::applicants::list_applicants),
+        )
+        .route(
+            "/api/me/jobs/{job_id}/applicants/{app_id}/detail",
+            get(handlers::applicants::get_applicant_detail),
+        )
+        .route(
+            "/api/me/jobs/{job_id}/applicants/{app_id}/cv",
+            get(handlers::applicants::get_applicant_cv),
+        )
+        .route(
+            "/api/me/jobs/{job_id}/applicants/{app_id}/history",
+            get(handlers::applicants::get_applicant_history),
+        )
+        .route(
+            "/api/me/jobs/{id}/applicants/bulk-status",
+            post(handlers::applicants::bulk_status_update),
+        )
+        .route(
+            "/api/me/jobs/{id}/applicants/export",
+            get(handlers::applicants::export_applicants),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V9: Saved Jobs routes (protected - job seekers)
+    let saved_jobs_routes = Router::new()
+        .route(
+            "/api/me/saved-jobs",
+            get(handlers::saved_jobs::list_saved_jobs),
+        )
+        .route(
+            "/api/me/saved-jobs/{job_id}",
+            post(handlers::saved_jobs::save_job).delete(handlers::saved_jobs::unsave_job),
+        )
+        .route(
+            "/api/me/saved-jobs/{job_id}/check",
+            get(handlers::saved_jobs::check_job_saved),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V9: File upload routes - Job seeker files (protected)
+    let file_seeker_routes = Router::new()
+        .route(
+            "/api/me/profile/cv",
+            put(handlers::files::upload_cv).delete(handlers::files::delete_cv),
+        )
+        .route(
+            "/api/me/profile/image",
+            put(handlers::files::upload_profile_image).delete(handlers::files::delete_profile_image),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V9: File upload routes - Company files (protected)
+    let file_company_routes = Router::new()
+        .route(
+            "/api/me/company/logo",
+            put(handlers::files::upload_company_logo).delete(handlers::files::delete_company_logo),
+        )
+        .route(
+            "/api/me/company/cover",
+            put(handlers::files::upload_company_cover).delete(handlers::files::delete_company_cover),
+        )
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // V9: File download route (protected - any authenticated user)
+    let file_download_routes = Router::new()
+        .route("/api/files/{id}", get(handlers::files::download_file))
+        .route_layer(middleware::from_fn_with_state(
+            app_state.clone(),
+            require_auth,
+        ));
+
+    // Build router (V1-V9)
     let app = Router::new()
         // Health check routes
         .route("/api/health", get(handlers::health))
@@ -204,6 +552,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Merge V4 company routes
         .merge(company_routes)
         .merge(company_public_routes)
+        // Merge V5 job and application routes
+        .merge(job_routes)
+        .merge(application_routes)
+        .merge(job_public_routes)
+        // Merge V6 admin routes
+        .merge(admin_routes)
+        // Merge V7 matching routes
+        .merge(matching_routes)
+        .merge(match_score_routes)
+        // Merge V8 OMIL routes
+        .merge(omil_routes)
+        .merge(omil_coordinator_routes)
+        .merge(omil_director_routes)
+        // Merge V8 invitation routes
+        .merge(invitation_company_routes)
+        .merge(invitation_seeker_routes)
+        // Merge V9 applicant management routes
+        .merge(applicant_routes)
+        // Merge V9 saved jobs routes
+        .merge(saved_jobs_routes)
+        // Merge V9 file upload routes
+        .merge(file_seeker_routes)
+        .merge(file_company_routes)
+        .merge(file_download_routes)
         // Middleware layers
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())

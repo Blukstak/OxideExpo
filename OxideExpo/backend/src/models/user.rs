@@ -137,8 +137,8 @@ pub struct RegisterOmilRequest {
     pub first_name: String,
     #[validate(length(min = 1, max = 100, message = "Last name is required"))]
     pub last_name: String,
-    #[validate(length(min = 1, message = "Municipality name is required"))]
-    pub municipality_name: String,
+    #[validate(length(min = 1, max = 255, message = "Organization name is required"))]
+    pub organization_name: String,
 }
 
 #[derive(Debug, Deserialize, Validate, TS)]

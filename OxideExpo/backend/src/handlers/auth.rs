@@ -192,7 +192,7 @@ pub async fn register_company(
 }
 
 /// POST /api/auth/register/omil
-/// Register a new OMIL member account (pending approval)
+/// Register a new OMIL member account with organization (pending approval)
 pub async fn register_omil(
     State(state): State<AppState>,
     Json(payload): Json<RegisterOmilRequest>,
@@ -202,9 +202,7 @@ pub async fn register_omil(
     let password_hash = hash_password(&payload.password)
         .map_err(|e| AppError::InternalError(format!("Failed to hash password: {}", e)))?;
 
-    // Note: municipality_name would be used to link to OMIL record in future
-    let _ = &payload.municipality_name;
-
+    // Create user
     let user = sqlx::query_as!(
         User,
         r#"
@@ -231,6 +229,30 @@ pub async fn register_omil(
             AppError::DatabaseError(e)
         }
     })?;
+
+    // Create OMIL organization (starts as pending_approval)
+    let omil_org = sqlx::query!(
+        r#"
+        INSERT INTO omil_organizations (organization_name, status)
+        VALUES ($1, 'pending_approval'::organization_status)
+        RETURNING id
+        "#,
+        payload.organization_name
+    )
+    .fetch_one(&state.db)
+    .await?;
+
+    // Create OMIL membership with director role
+    sqlx::query!(
+        r#"
+        INSERT INTO omil_members (omil_id, user_id, role)
+        VALUES ($1, $2, 'director'::omil_role)
+        "#,
+        omil_org.id,
+        user.id
+    )
+    .execute(&state.db)
+    .await?;
 
     // Create tokens
     let (access_token, expires_in) =
