@@ -9,6 +9,7 @@ use crate::{
     error::{AppError, Result},
     middleware::AuthUser,
     models::{
+        admin::{ApplicationStatusCount, CompanyDashboard, TopJobPerformance, TrendDataPoint},
         company::*,
         user::{MessageResponse, UserResponse},
     },
@@ -557,4 +558,124 @@ pub async fn get_public_company(
     .ok_or_else(|| AppError::NotFound("Company not found".to_string()))?;
 
     Ok(Json(PublicCompanyProfile::from(company)))
+}
+
+// ============================================================================
+// V12: COMPANY DASHBOARD
+// ============================================================================
+
+/// GET /api/me/company/dashboard
+/// Get company performance dashboard with job metrics
+pub async fn get_company_dashboard(
+    State(state): State<AppState>,
+    Extension(auth_user): Extension<AuthUser>,
+) -> Result<Json<CompanyDashboard>> {
+    if auth_user.user_type != "company_member" {
+        return Err(AppError::ForbiddenError(
+            "Only company members can access this endpoint".to_string(),
+        ));
+    }
+
+    let (company_id, _) = get_user_company_membership(&state.db, auth_user.id).await?;
+
+    // Get active jobs count
+    let active_jobs: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM jobs WHERE company_id = $1 AND status = 'active'",
+        company_id
+    )
+    .fetch_one(&state.db)
+    .await?
+    .unwrap_or(0);
+
+    // Get total applications received across all jobs
+    let total_applications: i64 = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) FROM job_applications ja
+        JOIN jobs j ON ja.job_id = j.id
+        WHERE j.company_id = $1
+        "#,
+        company_id
+    )
+    .fetch_one(&state.db)
+    .await?
+    .unwrap_or(0);
+
+    // Get application breakdown by status
+    let status_counts = sqlx::query!(
+        r#"
+        SELECT ja.status::TEXT AS "status!", COUNT(*) AS "count!"
+        FROM job_applications ja
+        JOIN jobs j ON ja.job_id = j.id
+        WHERE j.company_id = $1
+        GROUP BY ja.status
+        "#,
+        company_id
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let applications_by_status: Vec<ApplicationStatusCount> = status_counts
+        .into_iter()
+        .map(|row| ApplicationStatusCount {
+            status: row.status,
+            count: row.count,
+        })
+        .collect();
+
+    // Get applications trend for last 30 days
+    let applications_trend = sqlx::query!(
+        r#"
+        SELECT DATE(ja.applied_at) AS "date!", COUNT(*) AS "count!"
+        FROM job_applications ja
+        JOIN jobs j ON ja.job_id = j.id
+        WHERE j.company_id = $1 AND ja.applied_at >= NOW() - INTERVAL '30 days'
+        GROUP BY DATE(ja.applied_at)
+        ORDER BY DATE(ja.applied_at) ASC
+        "#,
+        company_id
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let trend: Vec<TrendDataPoint> = applications_trend
+        .into_iter()
+        .map(|row| TrendDataPoint {
+            date: row.date.to_string(),
+            count: row.count,
+        })
+        .collect();
+
+    // Get top performing jobs (by application count)
+    let top_jobs = sqlx::query!(
+        r#"
+        SELECT j.id, j.title, j.status::TEXT AS "status!", COUNT(ja.id) AS "applications_count!"
+        FROM jobs j
+        LEFT JOIN job_applications ja ON ja.job_id = j.id
+        WHERE j.company_id = $1 AND j.status = 'active'
+        GROUP BY j.id, j.title, j.status
+        ORDER BY COUNT(ja.id) DESC
+        LIMIT 5
+        "#,
+        company_id
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let top_jobs_list: Vec<TopJobPerformance> = top_jobs
+        .into_iter()
+        .map(|row| TopJobPerformance {
+            job_id: row.id,
+            title: row.title,
+            applications_count: row.applications_count,
+            status: row.status,
+        })
+        .collect();
+
+    Ok(Json(CompanyDashboard {
+        active_jobs,
+        total_applications,
+        applications_by_status,
+        trend,
+        top_jobs: top_jobs_list,
+    }))
 }

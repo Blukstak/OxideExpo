@@ -180,6 +180,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/me/company/members/{id}",
             put(handlers::company::update_member).delete(handlers::company::remove_member),
         )
+        // V12: Company Dashboard
+        .route(
+            "/api/me/company/dashboard",
+            get(handlers::company::get_company_dashboard),
+        )
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             require_auth,
@@ -283,6 +288,64 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/api/admin/jobs/{id}/reject",
             patch(handlers::admin::reject_job),
+        )
+        // V11: User management
+        .route("/api/admin/users", get(handlers::admin::list_users))
+        .route(
+            "/api/admin/users/{id}",
+            get(handlers::admin::get_user_detail),
+        )
+        .route(
+            "/api/admin/users/{id}/status",
+            patch(handlers::admin::update_user_status),
+        )
+        .route(
+            "/api/admin/users/{id}/impersonate",
+            get(handlers::admin::impersonate_user),
+        )
+        // V11: OMIL approvals
+        .route(
+            "/api/admin/omils/pending",
+            get(handlers::admin::list_pending_omils),
+        )
+        .route(
+            "/api/admin/omils/{id}/approve",
+            patch(handlers::admin::approve_omil),
+        )
+        .route(
+            "/api/admin/omils/{id}/reject",
+            patch(handlers::admin::reject_omil),
+        )
+        // V11: Audit log viewer
+        .route(
+            "/api/admin/audit-logs",
+            get(handlers::admin::list_audit_logs),
+        )
+        // V11: System settings
+        .route(
+            "/api/admin/settings",
+            get(handlers::admin::get_settings).put(handlers::admin::update_settings),
+        )
+        // V12: Reporting
+        .route(
+            "/api/admin/reports/users",
+            get(handlers::admin::report_users),
+        )
+        .route(
+            "/api/admin/reports/companies",
+            get(handlers::admin::report_companies),
+        )
+        .route(
+            "/api/admin/reports/jobs",
+            get(handlers::admin::report_jobs),
+        )
+        .route(
+            "/api/admin/reports/applications",
+            get(handlers::admin::report_applications),
+        )
+        .route(
+            "/api/admin/reports/export/{report_type}",
+            get(handlers::admin::export_report),
         )
         // Require authentication first, then admin privileges
         .route_layer(middleware::from_fn_with_state(

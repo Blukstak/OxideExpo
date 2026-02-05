@@ -246,8 +246,8 @@ pub struct UserFilterParams {
     pub user_type: Option<String>,
     pub status: Option<String>,
     pub search: Option<String>,
-    #[serde(flatten)]
-    pub pagination: PaginationParams,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -255,8 +255,8 @@ pub struct CompanyFilterParams {
     pub status: Option<String>,
     pub industry_id: Option<Uuid>,
     pub search: Option<String>,
-    #[serde(flatten)]
-    pub pagination: PaginationParams,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -265,8 +265,8 @@ pub struct JobFilterParams {
     pub job_type: Option<String>,
     pub company_id: Option<Uuid>,
     pub search: Option<String>,
-    #[serde(flatten)]
-    pub pagination: PaginationParams,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -275,6 +275,192 @@ pub struct AuditLogFilterParams {
     pub action_type: Option<String>,
     pub entity_type: Option<String>,
     pub entity_id: Option<Uuid>,
-    #[serde(flatten)]
-    pub pagination: PaginationParams,
+    pub from_date: Option<DateTime<Utc>>,
+    pub to_date: Option<DateTime<Utc>>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+// ============================================================================
+// V11: USER MANAGEMENT DTOs
+// ============================================================================
+
+use crate::models::user::{AccountStatus, UserType};
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct UserListItem {
+    pub id: Uuid,
+    pub email: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub user_type: UserType,
+    pub account_status: AccountStatus,
+    pub email_verified_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct UserDetail {
+    pub id: Uuid,
+    pub email: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub user_type: UserType,
+    pub account_status: AccountStatus,
+    pub email_verified_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    // Related info
+    pub company_id: Option<Uuid>,
+    pub company_name: Option<String>,
+    pub omil_id: Option<Uuid>,
+    pub omil_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateUserStatusRequest {
+    pub status: AccountStatus,
+    #[validate(length(max = 1000))]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct AdminImpersonationResponse {
+    pub impersonation_token: String,
+    pub expires_at: DateTime<Utc>,
+    pub user_id: Uuid,
+    pub user_email: String,
+}
+
+// ============================================================================
+// V11: OMIL APPROVAL DTOs
+// ============================================================================
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct ApproveOmilRequest {
+    #[validate(length(max = 1000))]
+    pub approval_notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct RejectOmilRequest {
+    #[validate(length(min = 10, max = 1000))]
+    pub rejection_reason: String,
+}
+
+// ============================================================================
+// V11: SYSTEM SETTINGS DTOs
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SystemSetting {
+    pub key: String,
+    #[ts(type = "any")]
+    pub value: serde_json::Value,
+    pub description: Option<String>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateSettingsRequest {
+    pub settings: Vec<SettingUpdate>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SettingUpdate {
+    pub key: String,
+    pub value: serde_json::Value,
+}
+
+// ============================================================================
+// V12: REPORTING DTOs
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+pub struct ReportDateRangeParams {
+    pub from_date: Option<DateTime<Utc>>,
+    pub to_date: Option<DateTime<Utc>>,
+    pub group_by: Option<String>, // day, week, month
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct TrendDataPoint {
+    pub date: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct UserTrendsReport {
+    pub total_users: i64,
+    pub new_users_period: i64,
+    pub by_type: Vec<UserTypeCount>,
+    pub trend: Vec<TrendDataPoint>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct UserTypeCount {
+    pub user_type: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct CompanyTrendsReport {
+    pub total_companies: i64,
+    pub active_companies: i64,
+    pub pending_companies: i64,
+    pub new_companies_period: i64,
+    pub trend: Vec<TrendDataPoint>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct JobTrendsReport {
+    pub total_jobs: i64,
+    pub active_jobs: i64,
+    pub pending_jobs: i64,
+    pub new_jobs_period: i64,
+    pub trend: Vec<TrendDataPoint>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct ApplicationTrendsReport {
+    pub total_applications: i64,
+    pub new_applications_period: i64,
+    pub by_status: Vec<ApplicationStatusCount>,
+    pub trend: Vec<TrendDataPoint>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct ApplicationStatusCount {
+    pub status: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct CompanyDashboard {
+    pub active_jobs: i64,
+    pub total_applications: i64,
+    pub applications_by_status: Vec<ApplicationStatusCount>,
+    pub trend: Vec<TrendDataPoint>,
+    pub top_jobs: Vec<TopJobPerformance>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct TopJobPerformance {
+    pub job_id: Uuid,
+    pub title: String,
+    pub applications_count: i64,
+    pub status: String,
 }
