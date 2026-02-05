@@ -422,11 +422,64 @@ pub async fn withdraw_application(
 pub async fn list_public_jobs(
     State(state): State<AppState>,
     Query(params): Query<PublicJobListQuery>,
-) -> Result<Json<Vec<PublicJobListing>>> {
-    let limit = params.limit.unwrap_or(50).min(100);
-    let offset = params.offset.unwrap_or(0);
+) -> Result<Json<PublicJobListResponse>> {
+    // Support both page/per_page and limit/offset pagination
+    let per_page = params.per_page.or(params.limit).unwrap_or(20).min(100);
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = params.offset.unwrap_or_else(|| (page - 1) * per_page);
 
-    // Build query dynamically based on filters
+    // Helper to build WHERE clause conditions
+    let build_where_clause = |query_builder: &mut sqlx::QueryBuilder<'_, sqlx::Postgres>| {
+        if let Some(region_id) = params.region_id {
+            query_builder.push(" AND j.region_id = ");
+            query_builder.push_bind(region_id);
+        }
+        if let Some(industry_id) = params.industry_id {
+            query_builder.push(" AND j.industry_id = ");
+            query_builder.push_bind(industry_id);
+        }
+        if let Some(work_area_id) = params.work_area_id {
+            query_builder.push(" AND j.work_area_id = ");
+            query_builder.push_bind(work_area_id);
+        }
+        if let Some(job_type) = params.job_type {
+            query_builder.push(" AND j.job_type = ");
+            query_builder.push_bind(job_type);
+        }
+        if let Some(work_modality) = params.work_modality {
+            query_builder.push(" AND j.work_modality = ");
+            query_builder.push_bind(work_modality);
+        }
+        if let Some(is_remote) = params.is_remote_allowed {
+            query_builder.push(" AND j.is_remote_allowed = ");
+            query_builder.push_bind(is_remote);
+        }
+        if let Some(ref search) = params.search {
+            query_builder.push(" AND (j.title ILIKE ");
+            query_builder.push_bind(format!("%{}%", search));
+            query_builder.push(" OR j.description ILIKE ");
+            query_builder.push_bind(format!("%{}%", search));
+            query_builder.push(")");
+        }
+    };
+
+    // Count query for pagination
+    let mut count_builder = sqlx::QueryBuilder::new(
+        r#"
+        SELECT COUNT(*)
+        FROM jobs j
+        INNER JOIN company_profiles c ON j.company_id = c.id
+        WHERE j.status = 'active' AND j.application_deadline >= CURRENT_DATE
+        "#,
+    );
+    build_where_clause(&mut count_builder);
+
+    let total: i64 = count_builder
+        .build_query_scalar::<i64>()
+        .fetch_one(&state.db)
+        .await?;
+
+    // Main query
     let mut query_builder = sqlx::QueryBuilder::new(
         r#"
         SELECT
@@ -443,49 +496,11 @@ pub async fn list_public_jobs(
         WHERE j.status = 'active' AND j.application_deadline >= CURRENT_DATE
         "#,
     );
-
-    // Add filters
-    if let Some(region_id) = params.region_id {
-        query_builder.push(" AND j.region_id = ");
-        query_builder.push_bind(region_id);
-    }
-
-    if let Some(industry_id) = params.industry_id {
-        query_builder.push(" AND j.industry_id = ");
-        query_builder.push_bind(industry_id);
-    }
-
-    if let Some(work_area_id) = params.work_area_id {
-        query_builder.push(" AND j.work_area_id = ");
-        query_builder.push_bind(work_area_id);
-    }
-
-    if let Some(job_type) = params.job_type {
-        query_builder.push(" AND j.job_type = ");
-        query_builder.push_bind(job_type);
-    }
-
-    if let Some(work_modality) = params.work_modality {
-        query_builder.push(" AND j.work_modality = ");
-        query_builder.push_bind(work_modality);
-    }
-
-    if let Some(is_remote) = params.is_remote_allowed {
-        query_builder.push(" AND j.is_remote_allowed = ");
-        query_builder.push_bind(is_remote);
-    }
-
-    if let Some(ref search) = params.search {
-        query_builder.push(" AND (j.title ILIKE ");
-        query_builder.push_bind(format!("%{}%", search));
-        query_builder.push(" OR j.description ILIKE ");
-        query_builder.push_bind(format!("%{}%", search));
-        query_builder.push(")");
-    }
+    build_where_clause(&mut query_builder);
 
     query_builder.push(" ORDER BY j.is_featured DESC, j.created_at DESC");
     query_builder.push(" LIMIT ");
-    query_builder.push_bind(limit);
+    query_builder.push_bind(per_page);
     query_builder.push(" OFFSET ");
     query_builder.push_bind(offset);
 
@@ -525,7 +540,15 @@ pub async fn list_public_jobs(
         });
     }
 
-    Ok(Json(result))
+    let total_pages = (total as f64 / per_page as f64).ceil() as i64;
+
+    Ok(Json(PublicJobListResponse {
+        jobs: result,
+        total,
+        page,
+        per_page,
+        total_pages,
+    }))
 }
 
 /// GET /api/jobs/{id}

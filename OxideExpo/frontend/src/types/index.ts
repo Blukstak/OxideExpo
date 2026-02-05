@@ -21,10 +21,10 @@ export interface AuthResponse {
 }
 
 export interface Job {
-  id: number;
-  company_id: number;
-  category_id?: number;
-  region_id?: number;
+  id: string;
+  company_id: string;
+  category_id?: string;
+  region_id?: string;
   title: string;
   description: string;
   requirements?: string;
@@ -58,9 +58,9 @@ export interface JobListResponse {
 }
 
 export interface JobApplication {
-  id: number;
-  job_id: number;
-  user_id: number;
+  id: string;
+  job_id: string;
+  user_id: string;
   cover_letter?: string;
   cv_url?: string;
   status: string;

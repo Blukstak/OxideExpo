@@ -440,6 +440,17 @@ pub struct FullJobResponse {
 // QUERY PARAMETERS
 // ============================================================================
 
+/// Paginated response for public job listings
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../frontend/src/types/")]
+pub struct PublicJobListResponse {
+    pub jobs: Vec<PublicJobListing>,
+    pub total: i64,
+    pub page: i64,
+    pub per_page: i64,
+    pub total_pages: i64,
+}
+
 #[derive(Debug, Deserialize, TS)]
 #[ts(export, export_to = "../frontend/src/types/")]
 pub struct PublicJobListQuery {
@@ -450,6 +461,9 @@ pub struct PublicJobListQuery {
     pub work_modality: Option<WorkModality>,
     pub is_remote_allowed: Option<bool>,
     pub search: Option<String>,
+    // Pagination - supports both page/per_page and limit/offset
+    pub page: Option<i64>,
+    pub per_page: Option<i64>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }

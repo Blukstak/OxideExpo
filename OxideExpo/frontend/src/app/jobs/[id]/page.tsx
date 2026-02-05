@@ -15,11 +15,12 @@ export default function JobDetailPage() {
   const [coverLetter, setCoverLetter] = useState('');
   const [showApplicationForm, setShowApplicationForm] = useState(false);
 
-  const jobId = Number(params.id);
+  const jobId = params.id as string;
 
   const { data: job, isLoading, error } = useQuery({
     queryKey: ['job', jobId],
     queryFn: () => jobsApi.get(jobId),
+    enabled: !!jobId,
   });
 
   const applyMutation = useMutation({

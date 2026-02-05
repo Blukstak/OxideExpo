@@ -30,7 +30,7 @@ export type LoginFormData = z.infer<typeof LoginSchema>;
 
 // Application schema
 export const ApplicationSchema = z.object({
-  job_id: z.number().int().positive(),
+  job_id: z.string().uuid(),
   cover_letter: z.string()
     .min(50, 'La carta de presentación debe tener al menos 50 caracteres')
     .max(2000, 'La carta de presentación no puede exceder 2000 caracteres')

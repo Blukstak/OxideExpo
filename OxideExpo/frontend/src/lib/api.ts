@@ -48,7 +48,7 @@ export const jobsApi = {
     return response.data;
   },
 
-  get: async (id: number): Promise<JobWithCompany> => {
+  get: async (id: string): Promise<JobWithCompany> => {
     const response = await api.get<JobWithCompany>(`/jobs/${id}`);
     return response.data;
   },
