@@ -1,23 +1,31 @@
 use axum::{
+    body::Body,
     extract::{Path, Query, State},
+    http::header,
+    response::Response,
     Extension, Json,
 };
 use chrono::Utc;
+use rust_xlsxwriter::{Format, Workbook};
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::error::AppError;
 use crate::middleware::omil_auth::OmilContext;
+use crate::models::application::ApplicationStatus;
 use crate::models::company::OrganizationStatus;
 use crate::models::omil::{
-    AddOmilMemberRequest, ApplyOnBehalfRequest, CreateFollowupRequest, FollowupType,
-    FollowupWithCreator, FollowupsQuery, JobSeekerFollowup, ManagedJobSeekerDetail,
-    ManagedJobSeekerSummary, ManagedJobSeekersQuery, OmilDashboardStats, OmilManagedJobSeeker,
-    OmilMember, OmilMemberWithUser, OmilOrganization, OmilOrganizationWithMembers, OmilRole,
-    PlacementOutcome, RegisterJobSeekerOnBehalfRequest, UpdateFollowupRequest,
-    UpdateOmilMemberRequest, UpdateOmilOrganizationRequest, UpdatePlacementRequest,
+    AddOmilMemberRequest, ApplyOnBehalfRequest, CreateFollowupRequest,
+    ExportManagedSeekersQuery, FollowupType, FollowupWithCreator, FollowupsQuery,
+    ImpersonationResponse, JobSeekerFollowup, ManagedJobSeekerDetail, ManagedJobSeekerSummary,
+    ManagedJobSeekersQuery, OmilApplicationWithDetails, OmilApplicationsQuery,
+    OmilApplicationsResponse, OmilDashboardStats, OmilManagedJobSeeker, OmilMember,
+    OmilMemberWithUser, OmilOrganization, OmilOrganizationWithMembers, OmilRole, PlacementOutcome,
+    RegisterJobSeekerOnBehalfRequest, UpdateFollowupRequest, UpdateOmilMemberRequest,
+    UpdateOmilOrganizationRequest, UpdatePlacementRequest,
 };
 use crate::models::profile::{Gender, JobSeekerProfile, MaritalStatus};
+use crate::utils::jwt::create_impersonation_token;
 use crate::AppState;
 
 // ============================================================================
@@ -1215,4 +1223,296 @@ pub async fn delete_followup(
         .await?;
 
     Ok(Json(serde_json::json!({ "message": "Followup deleted successfully" })))
+}
+
+// ============================================================================
+// V10: IMPERSONATION, EXPORT, APPLICATIONS
+// ============================================================================
+
+/// GET /api/me/omil/job-seekers/{id}/impersonate
+/// Generate an impersonation token to edit job seeker's profile
+pub async fn generate_impersonation(
+    State(state): State<AppState>,
+    Extension(omil_ctx): Extension<OmilContext>,
+    Path(managed_id): Path<Uuid>,
+) -> Result<Json<ImpersonationResponse>, AppError> {
+    // Get the managed job seeker
+    let managed = sqlx::query!(
+        r#"
+        SELECT mjs.job_seeker_id, (u.first_name || ' ' || u.last_name) as "user_name!"
+        FROM omil_managed_job_seekers mjs
+        JOIN users u ON u.id = mjs.job_seeker_id
+        WHERE mjs.id = $1 AND mjs.omil_id = $2 AND mjs.is_active = true
+        "#,
+        managed_id,
+        omil_ctx.organization.id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Managed job seeker not found".to_string()))?;
+
+    // Generate impersonation token
+    let (token, jti, expires_at) = create_impersonation_token(
+        managed.job_seeker_id,
+        omil_ctx.member.user_id,
+        omil_ctx.organization.id,
+        &state.config,
+    )
+    .map_err(|e| AppError::InternalError(format!("Failed to create token: {}", e)))?;
+
+    // Track the impersonation session
+    sqlx::query!(
+        r#"
+        INSERT INTO omil_impersonation_sessions (omil_member_id, job_seeker_id, token_jti, expires_at)
+        VALUES ($1, $2, $3, $4)
+        "#,
+        omil_ctx.member.id,
+        managed.job_seeker_id,
+        jti,
+        expires_at
+    )
+    .execute(&state.db)
+    .await?;
+
+    Ok(Json(ImpersonationResponse {
+        impersonation_token: token,
+        expires_at,
+        job_seeker_id: managed.job_seeker_id,
+        job_seeker_name: managed.user_name,
+    }))
+}
+
+/// GET /api/me/omil/job-seekers/export
+/// Export managed job seekers to Excel
+pub async fn export_managed_seekers(
+    State(state): State<AppState>,
+    Extension(omil_ctx): Extension<OmilContext>,
+    Query(query): Query<ExportManagedSeekersQuery>,
+) -> Result<Response, AppError> {
+    // Fetch all managed seekers with details
+    let seekers = sqlx::query!(
+        r#"
+        SELECT
+            (u.first_name || ' ' || u.last_name) as "user_name!",
+            u.email as "user_email!",
+            p.phone,
+            mjs.placement_outcome as "placement_outcome: PlacementOutcome",
+            (SELECT (first_name || ' ' || last_name) FROM users WHERE id = mjs.assigned_advisor_id) as assigned_advisor_name,
+            mjs.registered_at,
+            mjs.is_active
+        FROM omil_managed_job_seekers mjs
+        JOIN users u ON u.id = mjs.job_seeker_id
+        LEFT JOIN job_seeker_profiles p ON p.user_id = mjs.job_seeker_id
+        WHERE mjs.omil_id = $1
+        AND ($2::placement_outcome IS NULL OR mjs.placement_outcome = $2)
+        ORDER BY mjs.registered_at DESC
+        "#,
+        omil_ctx.organization.id,
+        query.placement_outcome as Option<PlacementOutcome>,
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    // Create Excel workbook
+    let mut workbook = Workbook::new();
+    let worksheet = workbook.add_worksheet();
+
+    // Header format
+    let header_format = Format::new().set_bold();
+
+    // Helper to map XlsxError to AppError
+    let xlsx_err =
+        |e: rust_xlsxwriter::XlsxError| AppError::InternalError(format!("Excel error: {}", e));
+
+    // Write headers
+    let include_contact = query.include_contact.unwrap_or(true);
+    let mut col = 0u16;
+    worksheet
+        .write_string_with_format(0, col, "Name", &header_format)
+        .map_err(xlsx_err)?;
+    col += 1;
+    if include_contact {
+        worksheet
+            .write_string_with_format(0, col, "Email", &header_format)
+            .map_err(xlsx_err)?;
+        col += 1;
+        worksheet
+            .write_string_with_format(0, col, "Phone", &header_format)
+            .map_err(xlsx_err)?;
+        col += 1;
+    }
+    worksheet
+        .write_string_with_format(0, col, "Placement Status", &header_format)
+        .map_err(xlsx_err)?;
+    col += 1;
+    worksheet
+        .write_string_with_format(0, col, "Advisor", &header_format)
+        .map_err(xlsx_err)?;
+    col += 1;
+    worksheet
+        .write_string_with_format(0, col, "Registered At", &header_format)
+        .map_err(xlsx_err)?;
+    col += 1;
+    worksheet
+        .write_string_with_format(0, col, "Active", &header_format)
+        .map_err(xlsx_err)?;
+
+    // Write data rows
+    for (row_idx, seeker) in seekers.iter().enumerate() {
+        let row = (row_idx + 1) as u32;
+        let mut col = 0u16;
+
+        worksheet
+            .write_string(row, col, &seeker.user_name)
+            .map_err(xlsx_err)?;
+        col += 1;
+
+        if include_contact {
+            worksheet
+                .write_string(row, col, &seeker.user_email)
+                .map_err(xlsx_err)?;
+            col += 1;
+            worksheet
+                .write_string(row, col, seeker.phone.as_deref().unwrap_or(""))
+                .map_err(xlsx_err)?;
+            col += 1;
+        }
+
+        let placement_str = format!("{:?}", seeker.placement_outcome);
+        worksheet
+            .write_string(row, col, &placement_str)
+            .map_err(xlsx_err)?;
+        col += 1;
+
+        worksheet
+            .write_string(
+                row,
+                col,
+                seeker.assigned_advisor_name.as_deref().unwrap_or(""),
+            )
+            .map_err(xlsx_err)?;
+        col += 1;
+
+        worksheet
+            .write_string(
+                row,
+                col,
+                &seeker.registered_at.format("%Y-%m-%d %H:%M").to_string(),
+            )
+            .map_err(xlsx_err)?;
+        col += 1;
+
+        worksheet
+            .write_string(row, col, if seeker.is_active { "Yes" } else { "No" })
+            .map_err(xlsx_err)?;
+    }
+
+    // Generate Excel file
+    let buffer = workbook
+        .save_to_buffer()
+        .map_err(|e| AppError::InternalError(format!("Failed to generate Excel: {}", e)))?;
+
+    // Sanitize filename
+    let safe_name: String = omil_ctx
+        .organization
+        .organization_name
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '-' || *c == '_')
+        .take(30)
+        .collect();
+    let filename = format!("managed-seekers-{}.xlsx", safe_name);
+    let content_disposition = format!("attachment; filename=\"{}\"", filename);
+
+    let response = Response::builder()
+        .header(
+            header::CONTENT_TYPE,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        .header(header::CONTENT_DISPOSITION, content_disposition)
+        .body(Body::from(buffer))
+        .map_err(|e| AppError::InternalError(format!("Failed to build response: {}", e)))?;
+
+    Ok(response)
+}
+
+/// GET /api/me/omil/applications
+/// List all applications submitted by this OMIL
+pub async fn list_omil_applications(
+    State(state): State<AppState>,
+    Extension(omil_ctx): Extension<OmilContext>,
+    Query(query): Query<OmilApplicationsQuery>,
+) -> Result<Json<OmilApplicationsResponse>, AppError> {
+    let limit = query.limit.unwrap_or(20).min(100);
+    let offset = query.offset.unwrap_or(0);
+
+    // Get total count
+    let total: i64 = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*)
+        FROM omil_applications oa
+        JOIN job_applications ja ON ja.id = oa.application_id
+        WHERE oa.omil_id = $1
+        AND ($2::uuid IS NULL OR ja.applicant_id = $2)
+        AND ($3::application_status IS NULL OR ja.status = $3)
+        "#,
+        omil_ctx.organization.id,
+        query.job_seeker_id,
+        query.status as Option<ApplicationStatus>,
+    )
+    .fetch_one(&state.db)
+    .await?
+    .unwrap_or(0);
+
+    // Get applications with details
+    let applications = sqlx::query!(
+        r#"
+        SELECT
+            ja.id as application_id,
+            ja.job_id,
+            j.title as job_title,
+            cp.legal_name as company_name,
+            ja.applicant_id as job_seeker_id,
+            (u.first_name || ' ' || u.last_name) as "job_seeker_name!",
+            ja.status as "status: ApplicationStatus",
+            ja.applied_at,
+            oa.submitted_by
+        FROM omil_applications oa
+        JOIN job_applications ja ON ja.id = oa.application_id
+        JOIN jobs j ON j.id = ja.job_id
+        JOIN company_profiles cp ON cp.id = j.company_id
+        JOIN users u ON u.id = ja.applicant_id
+        WHERE oa.omil_id = $1
+        AND ($2::uuid IS NULL OR ja.applicant_id = $2)
+        AND ($3::application_status IS NULL OR ja.status = $3)
+        ORDER BY ja.applied_at DESC
+        LIMIT $4 OFFSET $5
+        "#,
+        omil_ctx.organization.id,
+        query.job_seeker_id,
+        query.status as Option<ApplicationStatus>,
+        limit,
+        offset,
+    )
+    .fetch_all(&state.db)
+    .await?;
+
+    let apps: Vec<OmilApplicationWithDetails> = applications
+        .into_iter()
+        .map(|row| OmilApplicationWithDetails {
+            application_id: row.application_id,
+            job_id: row.job_id,
+            job_title: row.job_title,
+            company_name: row.company_name.unwrap_or_default(),
+            job_seeker_id: row.job_seeker_id,
+            job_seeker_name: row.job_seeker_name,
+            status: row.status,
+            applied_at: row.applied_at,
+            submitted_by: row.submitted_by,
+        })
+        .collect();
+
+    Ok(Json(OmilApplicationsResponse {
+        applications: apps,
+        total,
+    }))
 }

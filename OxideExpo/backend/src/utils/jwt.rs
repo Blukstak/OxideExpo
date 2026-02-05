@@ -95,6 +95,98 @@ pub fn hash_token(token: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+// ============================================================================
+// IMPERSONATION TOKENS (V10)
+// ============================================================================
+
+/// Claims for impersonation tokens - allows OMIL staff to edit job seeker profiles
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ImpersonationClaims {
+    /// Subject (job seeker user ID)
+    pub sub: String,
+    /// The OMIL member who is impersonating
+    pub omil_actor: String,
+    /// The OMIL organization ID
+    pub omil_id: String,
+    /// Token scope - currently only "profile_edit" supported
+    pub scope: String,
+    /// Expiration time (Unix timestamp)
+    pub exp: usize,
+    /// Issued at (Unix timestamp)
+    pub iat: usize,
+    /// JWT ID for tracking/revocation
+    pub jti: String,
+}
+
+impl ImpersonationClaims {
+    pub fn job_seeker_id(&self) -> Result<Uuid, uuid::Error> {
+        Uuid::parse_str(&self.sub)
+    }
+
+    pub fn omil_actor_id(&self) -> Result<Uuid, uuid::Error> {
+        Uuid::parse_str(&self.omil_actor)
+    }
+
+    pub fn jti_uuid(&self) -> Result<Uuid, uuid::Error> {
+        Uuid::parse_str(&self.jti)
+    }
+}
+
+/// Creates an impersonation token for OMIL staff to edit a job seeker's profile
+/// Token is valid for 30 minutes
+pub fn create_impersonation_token(
+    job_seeker_id: Uuid,
+    omil_actor_id: Uuid,
+    omil_id: Uuid,
+    config: &Config,
+) -> Result<(String, Uuid, chrono::DateTime<Utc>), jsonwebtoken::errors::Error> {
+    let now = Utc::now();
+    let expires_at = now
+        .checked_add_signed(Duration::minutes(30))
+        .expect("valid timestamp");
+
+    let jti = Uuid::new_v4();
+
+    let claims = ImpersonationClaims {
+        sub: job_seeker_id.to_string(),
+        omil_actor: omil_actor_id.to_string(),
+        omil_id: omil_id.to_string(),
+        scope: "profile_edit".to_string(),
+        exp: expires_at.timestamp() as usize,
+        iat: now.timestamp() as usize,
+        jti: jti.to_string(),
+    };
+
+    let token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(config.jwt_secret.as_bytes()),
+    )?;
+
+    Ok((token, jti, expires_at))
+}
+
+/// Verifies an impersonation token and returns the claims
+pub fn verify_impersonation_token(
+    token: &str,
+    config: &Config,
+) -> Result<ImpersonationClaims, jsonwebtoken::errors::Error> {
+    let token_data = decode::<ImpersonationClaims>(
+        token,
+        &DecodingKey::from_secret(config.jwt_secret.as_bytes()),
+        &Validation::default(),
+    )?;
+
+    // Verify scope
+    if token_data.claims.scope != "profile_edit" {
+        return Err(jsonwebtoken::errors::Error::from(
+            jsonwebtoken::errors::ErrorKind::InvalidToken,
+        ));
+    }
+
+    Ok(token_data.claims)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

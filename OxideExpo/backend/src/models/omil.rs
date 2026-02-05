@@ -420,3 +420,71 @@ pub struct InvitationsQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
+
+// ============================================================================
+// V10: IMPERSONATION, EXPORT, APPLICATIONS
+// ============================================================================
+
+/// Response for impersonation token generation
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../frontend/src/types/")]
+pub struct ImpersonationResponse {
+    pub impersonation_token: String,
+    pub expires_at: DateTime<Utc>,
+    pub job_seeker_id: Uuid,
+    pub job_seeker_name: String,
+}
+
+/// Impersonation session tracking
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, TS)]
+#[ts(export, export_to = "../frontend/src/types/")]
+pub struct OmilImpersonationSession {
+    pub id: Uuid,
+    pub omil_member_id: Uuid,
+    pub job_seeker_id: Uuid,
+    pub token_jti: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    pub revoked_at: Option<DateTime<Utc>>,
+}
+
+/// Query parameters for OMIL applications list
+#[derive(Debug, Deserialize, TS)]
+#[ts(export, export_to = "../frontend/src/types/")]
+pub struct OmilApplicationsQuery {
+    pub job_seeker_id: Option<Uuid>,
+    pub status: Option<super::application::ApplicationStatus>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+/// Query parameters for managed seekers export
+#[derive(Debug, Deserialize, TS)]
+#[ts(export, export_to = "../frontend/src/types/")]
+pub struct ExportManagedSeekersQuery {
+    pub placement_outcome: Option<PlacementOutcome>,
+    pub include_contact: Option<bool>,
+}
+
+/// OMIL application with job and seeker details
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../frontend/src/types/")]
+pub struct OmilApplicationWithDetails {
+    pub application_id: Uuid,
+    pub job_id: Uuid,
+    pub job_title: String,
+    pub company_name: String,
+    pub job_seeker_id: Uuid,
+    pub job_seeker_name: String,
+    pub status: super::application::ApplicationStatus,
+    pub applied_at: DateTime<Utc>,
+    pub submitted_by: Uuid,
+}
+
+/// Paginated list of OMIL applications
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../frontend/src/types/")]
+pub struct OmilApplicationsResponse {
+    pub applications: Vec<OmilApplicationWithDetails>,
+    pub total: i64,
+}

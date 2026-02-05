@@ -367,6 +367,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/me/omil/followups/{id}",
             put(handlers::omil::update_followup).delete(handlers::omil::delete_followup),
         )
+        // V10: Impersonation
+        .route(
+            "/api/me/omil/job-seekers/{id}/impersonate",
+            get(handlers::omil::generate_impersonation),
+        )
+        // V10: Export managed seekers
+        .route(
+            "/api/me/omil/job-seekers/export",
+            get(handlers::omil::export_managed_seekers),
+        )
+        // V10: List all OMIL applications
+        .route(
+            "/api/me/omil/applications",
+            get(handlers::omil::list_omil_applications),
+        )
         .route_layer(middleware::from_fn_with_state(
             app_state.clone(),
             require_omil,
